@@ -410,6 +410,24 @@ function getBayerRGB(dataIn, xres, yres, format, torgba) {
 	return ret;
 }
 
+function getPackedRAW10(dataIn, xres, yres, format, torgba) {
+    var ret = [];
+    var bpp = format.bpsp1 + format.bpsp2 + format.bpsp3;
+    for (var i = 0; i < (xres * yres * bpp); i += bpp) {
+        var r = getBits(dataIn, i, format.bpsp1, format.le);
+        var g = getBits(dataIn, i + format.bpsp1, format.bpsp2, format.le);
+        var b = getBits(dataIn, i + format.bpsp1 + format.bpsp2, format.bpsp3, format.le);
+        
+        // Convert the 10-bit channels to 8-bit
+        r = (r >> 2); 
+        g = (g >> 2);
+        b = (b >> 2);
+
+        ret.push(torgba(r, g, b, 0xff));
+    }
+    return ret;
+}
+
 function to8bit(x, bpp) {
 	if(!bpp) return -1;
 	if(bpp > 8)
@@ -459,6 +477,20 @@ function brga2rgba(b, r, g, a) {
 	return rgba2rgba(r, g, b, a);
 }
 
+function raw10ToRgba(r, g, b, a) {
+    // Scaling the 10-bit values to fit in 8-bit range (0-255)
+    r = (r >> 2); // right shift by 2 bits to fit 8-bit range
+    g = (g >> 2); // same for green
+    b = (b >> 2); // same for blue
+
+    // Ensure values are within the 8-bit range
+    r = Math.min(255, Math.max(0, r));
+    g = Math.min(255, Math.max(0, g));
+    b = Math.min(255, Math.max(0, b));
+
+    return (a << 24 | r | g << 8 | b << 16);
+}
+
 // grayscale
 function gray2rgba(y, foo1, foo2, a) {
 	var r = y, g = y , b = y;
@@ -504,6 +536,7 @@ Formats.push(new Format("RGB565", "RGBA", "Packed", 5,6,5,0,1,1,1,true,true,fals
 Formats.push(new Format("YUV 420 SP (NV12)", "YVU", "SemiPlanar", 8,8,8,0,1,2,2,false,true,false));
 Formats.push(new Format("YUV 420 SP (NV21)", "YUV", "SemiPlanar", 8,8,8,0,1,2,2,false,true,false));
 Formats.push(new Format("Grayscale 8bit", "Grayscale", "Packed", 8,0,0,0,1,1,1,false,true,false));
+Formats.push(new Format("RAW10", "RGBA", "Packed", 10, 10, 10, 0, 1, 1, 1, true, false, false));
 Formats.push(new Format("YV12", "YVU", "Planar", 8,8,8,0,1,2,2,false,true,false));
 Formats.push(new Format("YV16", "YVU", "Planar", 8,8,8,0,1,2,1,false,true,false));
 Formats.push(new Format("IYUV", "YUV", "Planar", 8,8,8,0,1,2,2,false,true,false));
@@ -523,6 +556,7 @@ Formats.push(new Format("UYVY",  "YVU", "PackedYUV", 8,8,8,8, 1,1,1,true,true,tr
 Formats.push(new Format("YUY2",  "YVU", "PackedYUV", 8,8,8,8, 1,1,1,false,true,true));
 
 PixelPlanes.push(new PixelPlane("Packed", getPackedEx));
+PixelPlanes.push(new PixelPlane("PackedRaw10", getPackedRAW10)); // Add new method for RAW10
 PixelPlanes.push(new PixelPlane("SemiPlanar", getSemiPlanarEx));
 PixelPlanes.push(new PixelPlane("Planar", getPlanarEx));
 PixelPlanes.push(new PixelPlane("PackedYUV", getPackedYUV));
@@ -536,6 +570,7 @@ PixelFormats.push(new PixelFormat("BRGA", brga2rgba));
 PixelFormats.push(new PixelFormat("YUV",  yuv2rgba));
 PixelFormats.push(new PixelFormat("YVU",  yvu2rgba));
 PixelFormats.push(new PixelFormat("Grayscale",  gray2rgba));
+PixelFormats.push(new PixelFormat("RGBA", raw10ToRgba)); // Add function for RGBA conversion
 
 function getPixels(dataIn, xres, yres, format) {
 	return format.getPixels(dataIn, xres, yres, format, format.toRgba);
@@ -933,7 +968,7 @@ window.addEventListener("load", function () {
 });
 
 //saveFile("test.txt","dGVzdA==");
-</script><div id="formatDiv">Predefined format:<select id="formatSelect" onchange="formatChange()"><option value="BGR8" selected="selected">BGR8</option><option value="RGB32">RGB32</option><option value="RGB24">RGB24</option><option value="RGB565">RGB565</option><option value="YUV 420 SP (NV12)">YUV 420 SP (NV12)</option><option value="YUV 420 SP (NV21)">YUV 420 SP (NV21)</option><option value="Grayscale 8bit">Grayscale 8bit</option><option value="YV12">YV12</option><option value="YV16">YV16</option><option value="IYUV">IYUV</option><option value="RGB555">RGB555</option><option value="RGB4_byte">RGB4_byte</option><option value="RGB8">RGB8</option><option value="YUV444p">YUV444p</option><option value="YUV440p">YUV440p</option><option value="YUV422p">YUV422p</option><option value="YUV420p">YUV420p</option><option value="YUV411p">YUV411p</option><option value="YUV410p">YUV410p</option><option value="Y444">Y444</option><option value="YUV555">YUV555</option><option value="YUV565">YUV565</option><option value="UYVY">UYVY</option><option value="YUY2">YUY2</option></select></div><div id="pixelDiv">Pixel Format:<select id="pixelFormatSelect" onchange="pixelFormatChange()"><option value="RGBA">RGBA</option><option value="BGRA" selected="selected">BGRA</option><option value="GBRA">GBRA</option><option value="GRBA">GRBA</option><option value="RBGA">RBGA</option><option value="BRGA">BRGA</option><option value="YUV">YUV</option><option value="YVU">YVU</option><option value="Grayscale">Grayscale</option></select>Ignore Alpha:<input id="format.ignoreAlphaInput" type="checkbox" onchange="{format.ignoreAlpha=document.getElementById('format.ignoreAlphaInput').checked;draw();}" value="0!=&quot;undefined&quot;">Alpha First:<input id="format.alphaFirstInput" type="checkbox" onchange="{format.alphaFirst=document.getElementById('format.alphaFirstInput').checked;draw();}" value="0!=&quot;undefined&quot;"></div><div id="pixelBppDiv">bpp1:<input id="format.bpsp1Input" type="text" class="varInput" onchange="{format.bpsp1=parseInt(document.getElementById('format.bpsp1Input').value);draw();}" value="2">bpp2:<input id="format.bpsp2Input" type="text" class="varInput" onchange="{format.bpsp2=parseInt(document.getElementById('format.bpsp2Input').value);draw();}" value="3">bpp3:<input id="format.bpsp3Input" type="text" class="varInput" onchange="{format.bpsp3=parseInt(document.getElementById('format.bpsp3Input').value);draw();}" value="3">bpp4:<input id="format.bpsp4Input" type="text" class="varInput" onchange="{format.bpsp4=parseInt(document.getElementById('format.bpsp4Input').value);draw();}" value="0">Litle Endian:<input id="format.leInput" type="checkbox" onchange="{format.le=document.getElementById('format.leInput').checked;draw();}" value="0!=&quot;undefined&quot;"></div><div id="pixelPlaneDiv">Pixel Plane:<select id="pixelPlaneSelect" onchange="pixelPlaneChange()"><option value="Packed" selected="selected">Packed</option><option value="SemiPlanar">SemiPlanar</option><option value="Planar">Planar</option><option value="PackedYUV">PackedYUV</option></select>alignment:<input id="format.alignInput" type="text" class="varInput" onchange="{format.align=parseInt(document.getElementById('format.alignInput').value);draw();}" value="1">subsamplig H:<input id="format.subshInput" type="text" class="varInput" onchange="{format.subsh=parseInt(document.getElementById('format.subshInput').value);draw();}" value="1">subsamplig V:<input id="format.subsvInput" type="text" class="varInput" onchange="{format.subsv=parseInt(document.getElementById('format.subsvInput').value);draw();}" value="1"></div><input id="txtout" type="text" value="Formats.push(new Format(&quot;&quot;,  &quot;BGRA&quot;, &quot;Packed&quot;, 2,3,3,0,1,1,1,false,false,false));">
+</script><div id="formatDiv">Predefined format:<select id="formatSelect" onchange="formatChange()"><option value="BGR8" selected="selected">BGR8</option><option value="RGB32">RGB32</option><option value="RGB24">RGB24</option><option value="RGB565">RGB565</option><option value="YUV 420 SP (NV12)">YUV 420 SP (NV12)</option><option value="YUV 420 SP (NV21)">YUV 420 SP (NV21)</option><option value="Grayscale 8bit">Grayscale 8bit</option><option value="RAW10">RAW10</option><option value="YV12">YV12</option><option value="YV16">YV16</option><option value="IYUV">IYUV</option><option value="RGB555">RGB555</option><option value="RGB4_byte">RGB4_byte</option><option value="RGB8">RGB8</option><option value="YUV444p">YUV444p</option><option value="YUV440p">YUV440p</option><option value="YUV422p">YUV422p</option><option value="YUV420p">YUV420p</option><option value="YUV411p">YUV411p</option><option value="YUV410p">YUV410p</option><option value="Y444">Y444</option><option value="YUV555">YUV555</option><option value="YUV565">YUV565</option><option value="UYVY">UYVY</option><option value="YUY2">YUY2</option></select></div><div id="pixelDiv">Pixel Format:<select id="pixelFormatSelect" onchange="pixelFormatChange()"><option value="RGBA">RGBA</option><option value="BGRA" selected="selected">BGRA</option><option value="GBRA">GBRA</option><option value="GRBA">GRBA</option><option value="RBGA">RBGA</option><option value="BRGA">BRGA</option><option value="YUV">YUV</option><option value="YVU">YVU</option><option value="Grayscale">Grayscale</option></select>Ignore Alpha:<input id="format.ignoreAlphaInput" type="checkbox" onchange="{format.ignoreAlpha=document.getElementById('format.ignoreAlphaInput').checked;draw();}" value="0!=&quot;undefined&quot;">Alpha First:<input id="format.alphaFirstInput" type="checkbox" onchange="{format.alphaFirst=document.getElementById('format.alphaFirstInput').checked;draw();}" value="0!=&quot;undefined&quot;"></div><div id="pixelBppDiv">bpp1:<input id="format.bpsp1Input" type="text" class="varInput" onchange="{format.bpsp1=parseInt(document.getElementById('format.bpsp1Input').value);draw();}" value="2">bpp2:<input id="format.bpsp2Input" type="text" class="varInput" onchange="{format.bpsp2=parseInt(document.getElementById('format.bpsp2Input').value);draw();}" value="3">bpp3:<input id="format.bpsp3Input" type="text" class="varInput" onchange="{format.bpsp3=parseInt(document.getElementById('format.bpsp3Input').value);draw();}" value="3">bpp4:<input id="format.bpsp4Input" type="text" class="varInput" onchange="{format.bpsp4=parseInt(document.getElementById('format.bpsp4Input').value);draw();}" value="0">Litle Endian:<input id="format.leInput" type="checkbox" onchange="{format.le=document.getElementById('format.leInput').checked;draw();}" value="0!=&quot;undefined&quot;"></div><div id="pixelPlaneDiv">Pixel Plane:<select id="pixelPlaneSelect" onchange="pixelPlaneChange()"><option value="Packed" selected="selected">Packed</option><option value="SemiPlanar">SemiPlanar</option><option value="Planar">Planar</option><option value="PackedYUV">PackedYUV</option></select>alignment:<input id="format.alignInput" type="text" class="varInput" onchange="{format.align=parseInt(document.getElementById('format.alignInput').value);draw();}" value="1">subsamplig H:<input id="format.subshInput" type="text" class="varInput" onchange="{format.subsh=parseInt(document.getElementById('format.subshInput').value);draw();}" value="1">subsamplig V:<input id="format.subsvInput" type="text" class="varInput" onchange="{format.subsv=parseInt(document.getElementById('format.subsvInput').value);draw();}" value="1"></div><input id="txtout" type="text" value="Formats.push(new Format(&quot;&quot;,  &quot;BGRA&quot;, &quot;Packed&quot;, 2,3,3,0,1,1,1,false,false,false));">
 </form>
 <div id="ref">
 <h2>References</h2>
